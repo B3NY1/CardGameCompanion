@@ -424,7 +424,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Startspieler wählen und Mitspieler hinzufügen.',
+              'Startspieler ist die erste Person nach dem Geber.',
               style: TextStyle(color: Color(0xFFACACAC)),
             ),
             const SizedBox(height: 24),
@@ -551,7 +551,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
               ),
             ),
             const Text(
-              'Der Startspieler sagt in Runde 1 zuerst an.',
+              'Der Startspieler sagt zuerst an und spielt den ersten Stich aus.',
               style: TextStyle(color: Color(0xFF8B8B8B)),
             ),
             const SizedBox(height: 16),
@@ -830,7 +830,7 @@ class _WizardGamePageState extends State<WizardGamePage>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${widget.game.currentRoundNumber} Stich${widget.game.currentRoundNumber == 1 ? '' : 'e'} - ${widget.game.players[_order.first]} beginnt',
+                  '${widget.game.currentRoundNumber} Stich${widget.game.currentRoundNumber == 1 ? '' : 'e'} - ${widget.game.players[_order.first]} beginnt als erste Person nach dem Geber',
                   style: const TextStyle(color: Color(0xFFACACAC)),
                 ),
                 if (widget.game.mode == WizardGameMode.houseRule)

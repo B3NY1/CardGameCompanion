@@ -23,12 +23,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Wizard'), findsOneWidget);
     expect(find.text('Anna'), findsAtLeastNWidgets(1));
+    expect(
+      find.text('Startspieler ist die erste Person nach dem Geber.'),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('back-button')), findsOneWidget);
 
     await tester.tap(find.text('Spiel starten'));
     await tester.pumpAndSettle();
 
     expect(find.text('Runde 1'), findsOneWidget);
+    expect(find.textContaining('erste Person nach dem Geber'), findsOneWidget);
     expect(find.text('Anna sagt an'), findsOneWidget);
     expect(find.byKey(const Key('back-button')), findsOneWidget);
 
