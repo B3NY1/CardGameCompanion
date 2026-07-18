@@ -168,7 +168,11 @@ class BinokelRoundPage extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text('Geber: ${game.players[game.dealerIndex]}'),
-            Text('$outPlayer kommt heraus.'),
+            Text(
+              game.isTeamGame
+                  ? '$outPlayer spielt die erste Karte aus. Alle vier Personen spielen aktiv.'
+                  : '$outPlayer kommt heraus und spielt die erste Karte aus.',
+            ),
             Text(
               '$bidder beginnt das Reizen.',
               style: const TextStyle(color: _accent),
