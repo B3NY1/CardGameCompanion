@@ -166,6 +166,43 @@ void main() {
     expect(find.byKey(const Key('back-button')), findsOneWidget);
   });
 
+  testWidgets('leaving a round result does not save a new draft', (
+    tester,
+  ) async {
+    var saves = 0;
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 2,
+      mode: WizardGameMode.houseRule,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WizardGamePage(game: game, onChanged: (_) async => saves++),
+      ),
+    );
+    for (var index = 0; index < 3; index++) {
+      await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+      await tester.pump();
+    }
+    await tester.tap(find.text('Stiche eintragen'));
+    await tester.pump();
+    for (final tricks in [0, 1, 0]) {
+      await tester.tap(find.widgetWithText(OutlinedButton, '$tricks'));
+      await tester.pump();
+    }
+    await tester.tap(find.text('Runde werten'));
+    await tester.pumpAndSettle();
+    final savesBeforeExit = saves;
+
+    await tester.tap(find.byKey(const Key('back-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Zur Übersicht'));
+    await tester.pumpAndSettle();
+
+    expect(saves, savesBeforeExit);
+    expect(game.draft, isNull);
+  });
+
   test('example game can be played through to a final score', () {
     final game = WizardGame(
       players: ['Anna', 'Ben', 'Clara'],
@@ -389,5 +426,29 @@ void main() {
     await tester.pump();
 
     expect(saved!.draft!.bids, [1, 0, null]);
+  });
+
+  testWidgets('draft save errors are shown to the player', (tester) async {
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 2,
+      mode: WizardGameMode.houseRule,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WizardGamePage(
+          game: game,
+          onChanged: (_) async => throw StateError('Speichern fehlgeschlagen'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('konnte nicht gespeichert werden'),
+      findsOneWidget,
+    );
   });
 }
