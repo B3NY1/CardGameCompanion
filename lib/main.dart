@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -43,6 +44,7 @@ class _GameHomePageState extends State<GameHomePage> {
   var _games = <WizardGame>[];
   var _people = <String>[];
   var _loading = true;
+  String? _storageWarning;
 
   @override
   void initState() {
@@ -57,6 +59,7 @@ class _GameHomePageState extends State<GameHomePage> {
     setState(() {
       _games = games;
       _people = people;
+      _storageWarning = _repository.gamesLoadWarning;
       _loading = false;
     });
   }
@@ -74,24 +77,16 @@ class _GameHomePageState extends State<GameHomePage> {
   Future<void> _openGame(WizardGame game) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => WizardGamePage(
-          game: game,
-          onChanged: _saveAndReload,
-          onAbandon: _repository.deleteGame,
-        ),
+        builder: (_) =>
+            WizardGamePage(game: game, onChanged: _repository.upsertGame),
       ),
     );
     await _reload();
   }
 
-  Future<void> _saveAndReload(WizardGame changedGame) async {
-    final index = _games.indexWhere(
-      (game) => game.startedAt == changedGame.startedAt,
-    );
-    if (index >= 0) {
-      _games[index] = changedGame;
-    }
-    await _repository.saveGames(_games);
+  Future<void> _resetCorruptStorage() async {
+    await _repository.clearGames();
+    await _reload();
   }
 
   @override
@@ -122,6 +117,30 @@ class _GameHomePageState extends State<GameHomePage> {
                       style: TextStyle(color: Color(0xFFACACAC)),
                     ),
                     const SizedBox(height: 24),
+                    if (_storageWarning != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF352A13),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              color: _accent,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(_storageWarning!)),
+                            TextButton(
+                              onPressed: _resetCorruptStorage,
+                              child: const Text('Zurücksetzen'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       height: 56,
@@ -488,16 +507,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                     MaterialPageRoute(
                       builder: (_) => WizardGamePage(
                         game: game,
-                        onChanged: (changed) async {
-                          final savedGames = await widget.repository
-                              .loadGames();
-                          final index = savedGames.indexWhere(
-                            (item) => item.startedAt == changed.startedAt,
-                          );
-                          if (index >= 0) savedGames[index] = changed;
-                          await widget.repository.saveGames(savedGames);
-                        },
-                        onAbandon: widget.repository.deleteGame,
+                        onChanged: widget.repository.upsertGame,
                       ),
                     ),
                   );
@@ -515,21 +525,16 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
 enum _Phase { bids, tricks, result, finished }
 
 class WizardGamePage extends StatefulWidget {
-  const WizardGamePage({
-    super.key,
-    required this.game,
-    this.onChanged,
-    this.onAbandon,
-  });
+  const WizardGamePage({super.key, required this.game, this.onChanged});
   final WizardGame game;
   final Future<void> Function(WizardGame game)? onChanged;
-  final Future<void> Function(WizardGame game)? onAbandon;
 
   @override
   State<WizardGamePage> createState() => _WizardGamePageState();
 }
 
-class _WizardGamePageState extends State<WizardGamePage> {
+class _WizardGamePageState extends State<WizardGamePage>
+    with WidgetsBindingObserver {
   late List<int> _order;
   late List<int?> _bids;
   late List<int?> _tricks;
@@ -538,8 +543,17 @@ class _WizardGamePageState extends State<WizardGamePage> {
   String? _error;
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      unawaited(_saveDraft());
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.game.isFinished) {
       _order = [];
       _bids = [];
@@ -550,6 +564,12 @@ class _WizardGamePageState extends State<WizardGamePage> {
     } else {
       _startRound();
     }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   void _startRound() {
@@ -591,14 +611,14 @@ class _WizardGamePageState extends State<WizardGamePage> {
     return result;
   }
 
-  void _saveDraft() {
+  Future<void> _saveDraft() async {
     widget.game.saveDraft(
       enteringTricks: _phase == _Phase.tricks,
       activePlayerOrderIndex: _active,
       bids: _baseOrderOptional(_bids),
       tricks: _baseOrderOptional(_tricks),
     );
-    widget.onChanged?.call(widget.game);
+    await widget.onChanged?.call(widget.game);
   }
 
   int? get _forbiddenBid {
@@ -633,7 +653,7 @@ class _WizardGamePageState extends State<WizardGamePage> {
       if (_active < _order.length - 1) _active++;
       _error = null;
     });
-    _saveDraft();
+    unawaited(_saveDraft());
   }
 
   void _correctTricks() {
@@ -642,7 +662,7 @@ class _WizardGamePageState extends State<WizardGamePage> {
       _active = 0;
       _error = null;
     });
-    _saveDraft();
+    unawaited(_saveDraft());
   }
 
   void _continueFromTricks() {
@@ -652,7 +672,7 @@ class _WizardGamePageState extends State<WizardGamePage> {
         () => _error =
             'Die Stiche müssen zusammen ${widget.game.currentRoundNumber} ergeben. Aktuell: $total.',
       );
-      _saveDraft();
+      unawaited(_saveDraft());
       return;
     }
     setState(() {
@@ -660,18 +680,22 @@ class _WizardGamePageState extends State<WizardGamePage> {
         bids: _baseOrder(_bids),
         tricks: _baseOrder(_tricks),
       );
-      widget.onChanged?.call(widget.game);
+      unawaited(widget.onChanged?.call(widget.game) ?? Future.value());
       _phase = widget.game.isFinished ? _Phase.finished : _Phase.result;
       _error = null;
     });
   }
 
   Future<void> _exitGame() async {
+    await _saveDraft();
+    if (!mounted) return;
     final leave = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Partie verlassen?'),
-        content: const Text('Der Spielstand geht verloren.'),
+        content: const Text(
+          'Dein Spielstand bleibt gespeichert und kann später fortgesetzt werden.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -679,13 +703,12 @@ class _WizardGamePageState extends State<WizardGamePage> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Verlassen'),
+            child: const Text('Zur Übersicht'),
           ),
         ],
       ),
     );
     if (leave == true) {
-      await widget.onAbandon?.call(widget.game);
       if (mounted) Navigator.of(context).pop();
     }
   }
@@ -704,7 +727,7 @@ class _WizardGamePageState extends State<WizardGamePage> {
         game: widget.game,
         onNext: () => setState(() {
           _startRound();
-          _saveDraft();
+          unawaited(_saveDraft());
         }),
         onExit: _exitGame,
       );
@@ -815,7 +838,7 @@ class _WizardGamePageState extends State<WizardGamePage> {
                           ? () => setState(() {
                               _phase = _Phase.tricks;
                               _active = 0;
-                              _saveDraft();
+                              unawaited(_saveDraft());
                             })
                           : _continueFromTricks,
                       child: Text(isBids ? 'Stiche eintragen' : 'Runde werten'),
@@ -973,11 +996,28 @@ class _FinishPage extends StatelessWidget {
                   width: double.infinity,
                   child: _ScoreGraph(game: game),
                 ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: List.generate(
+                    game.players.length,
+                    (index) => _ScoreLegend(
+                      name: game.players[index],
+                      color: _ScoreGraphPainter
+                          .colors[index % _ScoreGraphPainter.colors.length],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 18),
                 ...List.generate(
                   game.players.length,
-                  (i) =>
-                      _ScoreRow(name: game.players[i], total: game.scores[i]),
+                  (i) => _ScoreRow(
+                    name: game.players[i],
+                    total: game.scores[i],
+                    color: _ScoreGraphPainter
+                        .colors[i % _ScoreGraphPainter.colors.length],
+                  ),
                 ),
                 SizedBox(
                   width: double.infinity,
@@ -1302,11 +1342,37 @@ class _ValueTile extends StatelessWidget {
   );
 }
 
+class _ScoreLegend extends StatelessWidget {
+  const _ScoreLegend({required this.name, required this.color});
+  final String name;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 6),
+      Text(name),
+    ],
+  );
+}
+
 class _ScoreRow extends StatelessWidget {
-  const _ScoreRow({required this.name, required this.total, this.roundPoints});
+  const _ScoreRow({
+    required this.name,
+    required this.total,
+    this.roundPoints,
+    this.color,
+  });
   final String name;
   final int total;
   final int? roundPoints;
+  final Color? color;
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.only(bottom: 10),
@@ -1320,7 +1386,7 @@ class _ScoreRow extends StatelessWidget {
         Expanded(
           child: Text(
             name,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w700, color: color),
           ),
         ),
         if (roundPoints != null)

@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:card_game_companion/main.dart';
+import 'package:card_game_companion/game_repository.dart';
 import 'package:card_game_companion/wizard_game.dart';
 
 void main() {
@@ -177,5 +180,40 @@ void main() {
     await tester.tap(find.text('Runde werten'));
     await tester.pumpAndSettle();
     expect(find.text('SPIELENDE'), findsOneWidget);
+  });
+
+  test('damaged saved games do not hide valid games', () async {
+    final valid = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 2);
+    SharedPreferences.setMockInitialValues({
+      'wizard_games_v1': '[${jsonEncode(valid.toJson())},{"players":[]}]',
+    });
+    final repository = GameRepository();
+
+    final games = await repository.loadGames();
+
+    expect(games, hasLength(1));
+    expect(games.single.players, valid.players);
+    expect(repository.gamesLoadWarning, isNotNull);
+  });
+
+  testWidgets('latest draft is retained after rapid inputs', (tester) async {
+    WizardGame? saved;
+    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 2);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WizardGamePage(
+          game: game,
+          onChanged: (changed) async =>
+              saved = WizardGame.fromJson(changed.toJson()),
+        ),
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '1'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+
+    expect(saved!.draft!.bids, [1, 0, null]);
   });
 }
