@@ -37,7 +37,7 @@ class BinokelRoundResult {
 class BinokelGame {
   BinokelGame({required List<String> players, this.dealerIndex = 0})
     : _players = List.unmodifiable(players),
-      _scores = List.filled(players.length, 0, growable: true) {
+      _partyScores = List.filled(players.length == 4 ? 2 : players.length, 0) {
     if (players.length != 3 && players.length != 4) {
       throw ArgumentError('Binokel wird mit drei oder vier Personen gespielt.');
     }
@@ -52,21 +52,24 @@ class BinokelGame {
   }
 
   final List<String> _players;
-  final List<int> _scores;
+  final List<int> _partyScores;
   final List<BinokelRoundResult> _rounds = [];
   int dealerIndex;
 
   List<String> get players => _players;
-  List<int> get scores => List.unmodifiable(_scores);
+  List<int> get scores => List.unmodifiable(
+    List.generate(_players.length, (index) => _partyScores[partyFor(index)]),
+  );
+  List<int> get partyScores => List.unmodifiable(_partyScores);
   List<BinokelRoundResult> get rounds => List.unmodifiable(_rounds);
   bool get isTeamGame => _players.length == 4;
   int get outPlayerIndex => (dealerIndex + 1) % _players.length;
   int get biddingStarterIndex => (dealerIndex + 2) % _players.length;
-  bool get isFinished => _scores.any((score) => score >= 1500);
+  bool get isFinished => _partyScores.any((score) => score >= 1500);
   List<int> get winners => List.generate(
-    _scores.length,
+    _players.length,
     (index) => index,
-  ).where((index) => _scores[index] >= 1500).toList();
+  ).where((index) => _partyScores[partyFor(index)] >= 1500).toList();
 
   int partyFor(int playerIndex) => isTeamGame ? playerIndex % 2 : playerIndex;
 
@@ -76,12 +79,12 @@ class BinokelGame {
   BinokelRoundResult completeRound(BinokelRoundInput input) {
     _validateInput(input);
     if (isFinished) throw StateError('Das Spiel ist bereits beendet.');
-    final changes = List.filled(_players.length, 0);
+    final partyChanges = List.filled(_partyScores.length, 0);
     final declarerParty = partyFor(input.declarerIndex);
 
     if (input.type != BinokelGameType.normal) {
-      final success = !input.simpleGo && input.tricks[input.declarerIndex] > 0;
-      changes[input.declarerIndex] = success
+      final success = _specialGameSucceeded(input, declarerParty);
+      partyChanges[declarerParty] = success
           ? (input.open ? 1500 : 1000)
           : -2000;
       dealerIndex = success
@@ -90,28 +93,27 @@ class BinokelGame {
     } else {
       final declarerTotal = _partyTotal(input, declarerParty);
       final declarerSuccess = !input.simpleGo && declarerTotal >= input.bid;
-      for (var index = 0; index < _players.length; index++) {
-        final isDeclarerParty = partyFor(index) == declarerParty;
-        if (isDeclarerParty) continue;
-        changes[index] = _playerPoints(input, index);
+      for (var party = 0; party < _partyScores.length; party++) {
+        if (party != declarerParty) {
+          partyChanges[party] = _partyTotal(input, party);
+        }
       }
       if (declarerSuccess) {
-        for (var index = 0; index < _players.length; index++) {
-          if (partyFor(index) == declarerParty) {
-            changes[index] = _playerPoints(input, index);
-          }
-        }
+        partyChanges[declarerParty] = declarerTotal;
       } else {
-        changes[input.declarerIndex] = input.simpleGo
+        partyChanges[declarerParty] = input.simpleGo
             ? -input.bid
             : -2 * input.bid;
-        if (isTeamGame) changes[partnerOf(input.declarerIndex)] = 0;
       }
       dealerIndex = (dealerIndex + 1) % _players.length;
     }
-    for (var index = 0; index < _scores.length; index++) {
-      _scores[index] += changes[index];
+    for (var party = 0; party < _partyScores.length; party++) {
+      _partyScores[party] += partyChanges[party];
     }
+    final changes = List<int>.generate(
+      _players.length,
+      (index) => partyChanges[partyFor(index)],
+    );
     final result = BinokelRoundResult(
       input: input,
       scoreChanges: List.unmodifiable(changes),
@@ -134,6 +136,19 @@ class BinokelGame {
   }
 
   int _roundToTen(int value) => (value / 10).round() * 10;
+
+  bool _specialGameSucceeded(BinokelRoundInput input, int declarerParty) {
+    if (input.simpleGo) return false;
+    if (input.type == BinokelGameType.durch) {
+      return input.tricks[input.declarerIndex] > 0 &&
+          List.generate(_players.length, (index) => index)
+              .where((index) => index != input.declarerIndex)
+              .every((index) => input.tricks[index] == 0);
+    }
+    return List.generate(_players.length, (index) => index)
+        .where((index) => partyFor(index) == declarerParty)
+        .every((index) => input.tricks[index] == 0);
+  }
 
   void _validateInput(BinokelRoundInput input) {
     if (input.declarerIndex < 0 ||

@@ -22,7 +22,7 @@ void main() {
       ),
     );
 
-    expect(game.scores, [-400, 120, 0, 80]);
+    expect(game.scores, [-400, 200, -400, 200]);
     expect(game.dealerIndex, 1);
   });
 
@@ -45,6 +45,23 @@ void main() {
       expect(game.isFinished, isTrue);
     },
   );
+
+  test('Binokel evaluates Untendurch for the full Kreuzbinokel team', () {
+    final game = BinokelGame(players: ['Anna', 'Ben', 'Clara', 'David']);
+    game.completeRound(
+      const BinokelRoundInput(
+        declarerIndex: 0,
+        bid: 0,
+        type: BinokelGameType.untendurch,
+        countedPoints: [0, 0, 0, 0],
+        meldPoints: [0, 0, 0, 0],
+        tricks: [0, 1, 1, 0],
+      ),
+    );
+
+    expect(game.scores, [-2000, 0, -2000, 0]);
+    expect(game.dealerIndex, 0);
+  });
 
   testWidgets('Wizard setup shows players and can start a round', (
     tester,
