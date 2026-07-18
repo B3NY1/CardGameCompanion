@@ -1,0 +1,181 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:card_game_companion/main.dart';
+import 'package:card_game_companion/wizard_game.dart';
+
+void main() {
+  testWidgets('Wizard setup shows players and can start a round', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const CardGameCompanionApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Neues Spiel'));
+    await tester.pumpAndSettle();
+
+    await tester.pumpAndSettle();
+    expect(find.text('Neues Spiel'), findsOneWidget);
+    await tester.tap(find.text('Neues Spiel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Wizard'), findsOneWidget);
+    expect(find.text('Anna'), findsAtLeastNWidgets(1));
+    expect(find.byKey(const Key('back-button')), findsOneWidget);
+
+    await tester.tap(find.text('Spiel starten'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Runde 1'), findsOneWidget);
+    expect(find.text('Anna sagt an'), findsOneWidget);
+    expect(find.byKey(const Key('back-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('back-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Partie verlassen?'), findsOneWidget);
+    await tester.tap(find.text('Abbrechen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Runde 1'), findsOneWidget);
+  });
+
+  testWidgets('last Wizard bid is blocked when bids would add up', (
+    tester,
+  ) async {
+    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 5);
+    game.completeRound(bids: [0, 0, 0], tricks: [0, 1, 0]);
+    game.completeRound(bids: [0, 0, 0], tricks: [1, 1, 0]);
+    game.completeRound(bids: [0, 0, 0], tricks: [1, 1, 1]);
+    game.completeRound(bids: [0, 0, 0], tricks: [2, 1, 1]);
+
+    await tester.pumpWidget(MaterialApp(home: WizardGamePage(game: game)));
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '2'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '2'));
+    await tester.pump();
+
+    final forbiddenButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, '1'),
+    );
+    expect(forbiddenButton.onPressed, isNull);
+    expect(
+      find.text('1 ist gesperrt, damit die Ansagen nicht aufgehen.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a one-round game reaches the finish screen', (tester) async {
+    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 1);
+    await tester.pumpWidget(MaterialApp(home: WizardGamePage(game: game)));
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+    await tester.tap(find.text('Stiche eintragen'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '1'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+    await tester.tap(find.text('Runde werten'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('SPIELENDE'), findsOneWidget);
+    expect(find.text('Anna, Clara'), findsOneWidget);
+    expect(find.byKey(const Key('back-button')), findsOneWidget);
+  });
+
+  test('example game can be played through to a final score', () {
+    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 3);
+
+    game.completeRound(bids: [0, 1, 0], tricks: [0, 1, 0]);
+    game.completeRound(bids: [1, 0, 1], tricks: [1, 1, 0]);
+    game.completeRound(bids: [2, 1, 0], tricks: [2, 0, 1]);
+
+    expect(game.isFinished, isTrue);
+    expect(game.rounds, hasLength(3));
+    expect(game.rounds.map((round) => round.startingPlayerIndex), [0, 1, 2]);
+    expect(game.scores, [90, 10, 0]);
+  });
+
+  test('a round is rejected if its tricks do not add up', () {
+    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 1);
+
+    expect(
+      () => game.completeRound(bids: [0, 1, 0], tricks: [0, 0, 0]),
+      throwsArgumentError,
+    );
+  });
+
+  test('a saved game retains its players, scores and rounds', () {
+    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 2);
+    game.completeRound(bids: [0, 0, 0], tricks: [0, 1, 0]);
+
+    final restored = WizardGame.fromJson(game.toJson());
+
+    expect(restored.players, game.players);
+    expect(restored.scores, game.scores);
+    expect(restored.rounds, hasLength(1));
+    expect(restored.currentRoundNumber, 2);
+  });
+
+  test('invalid Wizard game configuration is rejected immediately', () {
+    expect(
+      () => WizardGame(players: ['Anna', 'Anna', 'Clara'], totalRounds: 1),
+      throwsArgumentError,
+    );
+    expect(
+      () => WizardGame(players: ['Anna', '', 'Clara'], totalRounds: 1),
+      throwsArgumentError,
+    );
+    expect(
+      () => WizardGame(
+        players: ['Anna', 'Ben', 'Clara'],
+        totalRounds: 1,
+        initialStartingPlayerIndex: 3,
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  testWidgets('wrong trick total can be corrected within the same round', (
+    tester,
+  ) async {
+    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 2);
+    game.completeRound(bids: [0, 0, 0], tricks: [1, 0, 0]);
+    await tester.pumpWidget(MaterialApp(home: WizardGamePage(game: game)));
+
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+      await tester.pump();
+    }
+    await tester.tap(find.text('Stiche eintragen'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '1'));
+    await tester.pump();
+    await tester.tap(find.text('Runde werten'));
+    await tester.pump();
+
+    expect(find.text('Stiche korrigieren'), findsOneWidget);
+    await tester.tap(find.text('Stiche korrigieren'));
+    await tester.pump();
+    expect(find.text('Ben hat erzielt'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, '1'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '1'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '0'));
+    await tester.pump();
+    await tester.tap(find.text('Runde werten'));
+    await tester.pumpAndSettle();
+    expect(find.text('SPIELENDE'), findsOneWidget);
+  });
+}
