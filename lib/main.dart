@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'wizard_game.dart';
 import 'game_repository.dart';
 import 'round_overview_page.dart';
+import 'binokel_setup_page.dart';
 
 void main() => runApp(const CardGameCompanionApp());
 
@@ -73,6 +74,52 @@ class _GameHomePageState extends State<GameHomePage> {
       ),
     );
     await _reload();
+  }
+
+  Future<void> _openGamePicker() async {
+    final game = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Welches Spiel?',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(
+                  Icons.auto_awesome_outlined,
+                  color: _accent,
+                ),
+                title: const Text('Wizard'),
+                subtitle: const Text('Ansagen und Stiche'),
+                onTap: () => Navigator.of(context).pop('wizard'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.style_outlined, color: _accent),
+                title: const Text('Binokel'),
+                subtitle: const Text('Reizen, Melden und Punkte'),
+                onTap: () => Navigator.of(context).pop('binokel'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || game == null) return;
+    if (game == 'wizard') {
+      await _openSetup();
+    } else {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BinokelSetupPage(knownPeople: _people),
+        ),
+      );
+    }
   }
 
   Future<void> _openGame(WizardGame game) async {
@@ -146,7 +193,7 @@ class _GameHomePageState extends State<GameHomePage> {
                       width: double.infinity,
                       height: 56,
                       child: FilledButton.icon(
-                        onPressed: _openSetup,
+                        onPressed: _openGamePicker,
                         icon: const Icon(Icons.add),
                         label: const Text('Neues Spiel'),
                       ),
