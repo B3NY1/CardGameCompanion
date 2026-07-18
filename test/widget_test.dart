@@ -6,8 +6,46 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:card_game_companion/main.dart';
 import 'package:card_game_companion/game_repository.dart';
 import 'package:card_game_companion/wizard_game.dart';
+import 'package:card_game_companion/binokel_game.dart';
 
 void main() {
+  test('Binokel handles team loss, meld forfeits and dealer rotation', () {
+    final game = BinokelGame(players: ['Anna', 'Ben', 'Clara', 'David']);
+    game.completeRound(
+      const BinokelRoundInput(
+        declarerIndex: 0,
+        bid: 200,
+        type: BinokelGameType.normal,
+        countedPoints: [80, 100, 40, 60],
+        meldPoints: [40, 20, 0, 20],
+        tricks: [1, 1, 1, 1],
+      ),
+    );
+
+    expect(game.scores, [-400, 120, 0, 80]);
+    expect(game.dealerIndex, 1);
+  });
+
+  test(
+    'Binokel awards an open Durch and sets the declarer as dealer on loss',
+    () {
+      final game = BinokelGame(players: ['Anna', 'Ben', 'Clara']);
+      game.completeRound(
+        const BinokelRoundInput(
+          declarerIndex: 1,
+          bid: 0,
+          type: BinokelGameType.durch,
+          open: true,
+          countedPoints: [0, 0, 0],
+          meldPoints: [0, 0, 0],
+          tricks: [0, 1, 0],
+        ),
+      );
+      expect(game.scores, [0, 1500, 0]);
+      expect(game.isFinished, isTrue);
+    },
+  );
+
   testWidgets('Wizard setup shows players and can start a round', (
     tester,
   ) async {
