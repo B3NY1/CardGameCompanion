@@ -12,24 +12,26 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const CardGameCompanionApp());
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Neues Spiel'));
-    await tester.pumpAndSettle();
-
-    await tester.pumpAndSettle();
-    expect(find.text('Neues Spiel'), findsOneWidget);
-    await tester.tap(find.text('Neues Spiel'));
-    await tester.pumpAndSettle();
-    expect(find.text('Wizard'), findsOneWidget);
-    expect(find.text('Anna'), findsAtLeastNWidgets(1));
-    expect(
-      find.text('Startspieler ist die erste Person nach dem Geber.'),
-      findsOneWidget,
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WizardSetupPage(
+          knownPeople: const [],
+          repository: GameRepository(),
+        ),
+      ),
     );
-    expect(find.byKey(const Key('back-button')), findsOneWidget);
+    expect(find.text('Wizard'), findsOneWidget);
+    for (final name in ['Anna', 'Ben', 'Clara']) {
+      await tester.enterText(find.byType(TextField), name);
+      await tester.ensureVisible(find.byIcon(Icons.add));
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+    }
+    expect(find.text('Anna'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.text('Spiel starten'));
+    final startGame = find.byKey(const Key('start-game-button'));
+    await tester.tap(startGame);
     await tester.pumpAndSettle();
 
     expect(find.text('Runde 1'), findsOneWidget);
@@ -43,6 +45,7 @@ void main() {
     await tester.tap(find.text('Abbrechen'));
     await tester.pumpAndSettle();
     expect(find.text('Runde 1'), findsOneWidget);
+    await tester.binding.setSurfaceSize(null);
   });
 
   testWidgets('last Wizard bid is blocked when bids would add up', (
@@ -73,6 +76,63 @@ void main() {
     expect(
       find.text('1 ist gesperrt, damit die Ansagen nicht aufgehen.'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('setup keeps its primary action reachable on a small viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 500));
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WizardSetupPage(
+          knownPeople: const [],
+          repository: GameRepository(),
+        ),
+      ),
+    );
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('start-game-button')), findsOneWidget);
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('players can be edited and removed before a game starts', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WizardSetupPage(
+          knownPeople: const [],
+          repository: GameRepository(),
+        ),
+      ),
+    );
+    for (final name in ['Anna', 'Ben', 'Clara']) {
+      await tester.enterText(find.byType(TextField), name);
+      await tester.ensureVisible(find.byIcon(Icons.add));
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+    }
+
+    await tester.tap(find.byTooltip('Spieler bearbeiten').at(1));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Benny');
+    await tester.tap(find.text('Speichern'));
+    await tester.pumpAndSettle();
+    expect(find.text('Benny'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byTooltip('Spieler entfernen').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('start-game-button')), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('start-game-button')))
+          .onPressed,
+      isNull,
     );
   });
 
@@ -182,7 +242,7 @@ void main() {
     );
   });
 
-  test('house rules retain the selected round count', () {
+  test('house rules retain their configured round count for simulations', () {
     final game = WizardGame(
       players: ['Anna', 'Ben', 'Clara'],
       totalRounds: 7,

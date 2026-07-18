@@ -362,14 +362,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
   @override
   void initState() {
     super.initState();
-    _players = widget.knownPeople.take(3).toList();
-    _players.addAll(
-      [
-        'Anna',
-        'Ben',
-        'Clara',
-      ].where((name) => !_players.contains(name)).take(3 - _players.length),
-    );
+    _players = [];
     _syncClassicRounds();
   }
 
@@ -381,9 +374,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
 
   void _addPlayer() {
     final name = _controller.text.trim();
-    if (name.isEmpty ||
-        _players.contains(name) ||
-        (_mode == WizardGameMode.classic && _players.length >= 6)) {
+    if (name.isEmpty || _players.contains(name) || _players.length >= 6) {
       return;
     }
     setState(() {
@@ -394,9 +385,41 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
   }
 
   void _syncClassicRounds() {
-    if (_mode == WizardGameMode.classic) {
+    if (_players.length >= 3 && _players.length <= 6) {
       _totalRounds = classicWizardRoundsForPlayers(_players.length);
     }
+  }
+
+  Future<void> _editPlayer(int index) async {
+    final controller = TextEditingController(text: _players[index]);
+    final updatedName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Spieler bearbeiten'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Speichern'),
+          ),
+        ],
+      ),
+    );
+    if (updatedName == null ||
+        updatedName.isEmpty ||
+        (_players.contains(updatedName) && updatedName != _players[index])) {
+      return;
+    }
+    setState(() => _players[index] = updatedName);
   }
 
   @override
@@ -404,11 +427,9 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
     body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ListView(
           children: [
             _PageHeader(onBack: () => Navigator.of(context).pop()),
-            const Spacer(),
             const Text(
               'Neues Spiel',
               style: TextStyle(
@@ -424,7 +445,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Startspieler ist die erste Person nach dem Geber.',
+              'Füge mindestens drei Personen hinzu. Der Startspieler ist die erste Person nach dem Geber.',
               style: TextStyle(color: Color(0xFFACACAC)),
             ),
             const SizedBox(height: 24),
@@ -442,8 +463,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                       (person) => ActionChip(
                         label: Text(person),
                         onPressed: () => setState(() {
-                          if (_mode == WizardGameMode.classic &&
-                              _players.length >= 6) {
+                          if (_players.length >= 6) {
                             return;
                           }
                           _players.add(person);
@@ -490,24 +510,10 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
-                if (_mode == WizardGameMode.classic)
-                  Text(
-                    '$_totalRounds (klassisch)',
-                    style: const TextStyle(color: _accent),
-                  )
-                else
-                  DropdownButton<int>(
-                    value: _totalRounds,
-                    onChanged: (rounds) =>
-                        setState(() => _totalRounds = rounds!),
-                    items: List.generate(
-                      20,
-                      (index) => DropdownMenuItem(
-                        value: index + 1,
-                        child: Text('${index + 1}'),
-                      ),
-                    ),
-                  ),
+                Text(
+                  '$_totalRounds automatisch',
+                  style: const TextStyle(color: _accent),
+                ),
               ],
             ),
             if (_mode == WizardGameMode.houseRule)
@@ -522,33 +528,32 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                     setState(() => _bidLockEnabled = enabled),
               ),
             const SizedBox(height: 8),
-            Expanded(
-              child: ListView.separated(
-                itemCount: _players.length + 1,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  if (index == _players.length) {
-                    return _AddPlayerField(
-                      controller: _controller,
-                      onAdd: _addPlayer,
-                    );
-                  }
-                  return _PlayerTile(
-                    name: _players[index],
-                    start: index == _startPlayer,
-                    onTap: () => setState(() => _startPlayer = index),
-                    onRemove: _players.length > 3
-                        ? () => setState(() {
-                            _players.removeAt(index);
-                            if (_startPlayer >= _players.length) {
-                              _startPlayer = 0;
-                            }
-                            _syncClassicRounds();
-                          })
-                        : null,
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _players.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                if (index == _players.length) {
+                  return _AddPlayerField(
+                    controller: _controller,
+                    onAdd: _addPlayer,
                   );
-                },
-              ),
+                }
+                return _PlayerTile(
+                  name: _players[index],
+                  start: index == _startPlayer,
+                  onTap: () => setState(() => _startPlayer = index),
+                  onEdit: () => _editPlayer(index),
+                  onRemove: () => setState(() {
+                    _players.removeAt(index);
+                    if (_startPlayer >= _players.length) {
+                      _startPlayer = 0;
+                    }
+                    _syncClassicRounds();
+                  }),
+                );
+              },
             ),
             const Text(
               'Der Startspieler sagt zuerst an und spielt den ersten Stich aus.',
@@ -559,26 +564,29 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
               width: double.infinity,
               height: 56,
               child: FilledButton(
-                onPressed: () async {
-                  final game = WizardGame(
-                    players: _players,
-                    totalRounds: _totalRounds,
-                    initialStartingPlayerIndex: _startPlayer,
-                    mode: _mode,
-                    bidLockEnabled: _bidLockEnabled,
-                  );
-                  final games = await widget.repository.loadGames();
-                  await widget.repository.saveGames([...games, game]);
-                  if (!context.mounted) return;
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => WizardGamePage(
-                        game: game,
-                        onChanged: widget.repository.upsertGame,
-                      ),
-                    ),
-                  );
-                },
+                key: const Key('start-game-button'),
+                onPressed: _players.length < 3 || _players.length > 6
+                    ? null
+                    : () async {
+                        final game = WizardGame(
+                          players: _players,
+                          totalRounds: _totalRounds,
+                          initialStartingPlayerIndex: _startPlayer,
+                          mode: _mode,
+                          bidLockEnabled: _bidLockEnabled,
+                        );
+                        final games = await widget.repository.loadGames();
+                        await widget.repository.saveGames([...games, game]);
+                        if (!context.mounted) return;
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => WizardGamePage(
+                              game: game,
+                              onChanged: widget.repository.upsertGame,
+                            ),
+                          ),
+                        );
+                      },
                 child: const Text('Spiel starten'),
               ),
             ),
@@ -1301,11 +1309,13 @@ class _PlayerTile extends StatelessWidget {
     required this.name,
     required this.start,
     required this.onTap,
+    required this.onEdit,
     this.onRemove,
   });
   final String name;
   final bool start;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
   final VoidCallback? onRemove;
   @override
   Widget build(BuildContext context) => Material(
@@ -1330,10 +1340,16 @@ class _PlayerTile extends StatelessWidget {
               ),
             ),
             if (start) const _Tag('START'),
+            IconButton(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              tooltip: 'Spieler bearbeiten',
+            ),
             if (onRemove != null)
               IconButton(
                 onPressed: onRemove,
                 icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Spieler entfernen',
               ),
           ],
         ),
