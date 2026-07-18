@@ -35,6 +35,13 @@ Der Status wird bei jeder Erweiterung aktualisiert.
 
 - [vorhanden] Lange Setup-Inhalte sind scrollbar; die primäre Aktion bleibt auf kleinen Bildschirmen erreichbar
 
+## 6. Datenintegrität und Speicherung
+
+- [vorhanden] Persistierte Wizard-Runden werden beim Laden validiert; Punktestände werden aus den Runden neu berechnet
+- [vorhanden] Ungültige Entwürfe werden sicher verworfen, ohne die restliche Partie zu verlieren
+- [vorhanden] Speicherfehler werden erkannt und im Spielablauf verständlich angezeigt
+- [vorhanden] Die Punktetabelle ist als eigener Screen in `lib/round_overview_page.dart` ausgelagert
+
 ## Entscheidungen
 
 - [vorhanden] Wizard 30-Jahre-Edition ist für Version 1 bewusst abgegrenzt; Begründung und Folgearbeit stehen in `docs/wizard-30-jahre-entscheidung.md`

@@ -212,6 +212,43 @@ void main() {
     expect(restored.currentRoundNumber, 2);
   });
 
+  test('saved games derive scores and discard invalid drafts', () {
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 2,
+      mode: WizardGameMode.houseRule,
+    );
+    game.completeRound(bids: [0, 0, 0], tricks: [0, 1, 0]);
+    final saved = game.toJson()
+      ..['scores'] = [999, 999, 999]
+      ..['draft'] = {
+        'enteringTricks': false,
+        'activePlayerOrderIndex': 4,
+        'bids': [0, 0, 0],
+        'tricks': [null, null, null],
+      };
+
+    final restored = WizardGame.fromJson(saved);
+
+    expect(restored.scores, game.scores);
+    expect(restored.draft, isNull);
+  });
+
+  test('inconsistent stored rounds are rejected safely', () {
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 2,
+      mode: WizardGameMode.houseRule,
+    );
+    game.completeRound(bids: [0, 0, 0], tricks: [0, 1, 0]);
+    final saved = game.toJson();
+    final round = Map<String, dynamic>.from((saved['rounds'] as List).single);
+    round['points'] = [0, 0, 0];
+    saved['rounds'] = [round];
+
+    expect(() => WizardGame.fromJson(saved), throwsFormatException);
+  });
+
   test('invalid Wizard game configuration is rejected immediately', () {
     expect(
       () => WizardGame(players: ['Anna', 'Anna', 'Clara'], totalRounds: 1),

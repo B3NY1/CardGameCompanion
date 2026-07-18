@@ -4,6 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'wizard_game.dart';
 
+class GameStorageException implements Exception {
+  const GameStorageException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class GameRepository {
   static const _gamesKey = 'wizard_games_v1';
   static const _peopleKey = 'known_people_v1';
@@ -57,12 +65,25 @@ class GameRepository {
 
   Future<void> _saveGames(List<WizardGame> games) async {
     final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
+    final gamesSaved = await preferences.setString(
       _gamesKey,
       jsonEncode(games.map((game) => game.toJson()).toList()),
     );
+    if (!gamesSaved) {
+      throw const GameStorageException(
+        'Partien konnten nicht gespeichert werden.',
+      );
+    }
     final people = <String>{for (final game in games) ...game.players};
-    await preferences.setStringList(_peopleKey, people.toList()..sort());
+    final peopleSaved = await preferences.setStringList(
+      _peopleKey,
+      people.toList()..sort(),
+    );
+    if (!peopleSaved) {
+      throw const GameStorageException(
+        'Spielerliste konnte nicht gespeichert werden.',
+      );
+    }
   }
 
   Future<void> deleteGame(WizardGame game) => _enqueue(() async {
@@ -73,7 +94,12 @@ class GameRepository {
 
   Future<void> clearGames() => _enqueue(() async {
     final preferences = await SharedPreferences.getInstance();
-    await preferences.remove(_gamesKey);
+    final removed = await preferences.remove(_gamesKey);
+    if (!removed) {
+      throw const GameStorageException(
+        'Partien konnten nicht gelöscht werden.',
+      );
+    }
   });
 
   Future<List<WizardGame>> _loadGamesWithoutWarning() async {

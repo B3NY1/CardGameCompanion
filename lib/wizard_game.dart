@@ -98,7 +98,7 @@ class WizardGame {
        _players = List.unmodifiable(players),
        _scores = List.filled(players.length, 0, growable: true),
        startedAt = startedAt ?? DateTime.now() {
-    if (players.length < 3) {
+    if (players.length < 3 || players.length > 6) {
       throw ArgumentError.value(
         players,
         'players',
@@ -169,28 +169,42 @@ class WizardGame {
   };
 
   factory WizardGame.fromJson(Map<String, dynamic> json) {
+    final players = List<String>.from(json['players'] as List);
+    final roundsData = json['rounds'] as List;
     final game = WizardGame(
-      players: List<String>.from(json['players'] as List),
+      players: players,
       totalRounds: json['totalRounds'] as int,
       initialStartingPlayerIndex: json['initialStartingPlayerIndex'] as int,
       mode: WizardGameMode.fromStorage(json['mode'] as String?),
       bidLockEnabled: json['bidLockEnabled'] as bool? ?? false,
       startedAt: DateTime.parse(json['startedAt'] as String),
     );
-    game._scores
-      ..clear()
-      ..addAll(List<int>.from(json['scores'] as List));
-    game._rounds.addAll(
-      (json['rounds'] as List).map(
-        (round) =>
-            WizardRoundResult.fromJson(Map<String, dynamic>.from(round as Map)),
-      ),
-    );
-    final draft = json['draft'];
-    if (draft != null) {
-      game._draft = WizardRoundDraft.fromJson(
-        Map<String, dynamic>.from(draft as Map),
+    if (roundsData.length > game.totalRounds) {
+      throw FormatException('Zu viele gespeicherte Runden.');
+    }
+    for (var index = 0; index < roundsData.length; index++) {
+      final round = WizardRoundResult.fromJson(
+        Map<String, dynamic>.from(roundsData[index] as Map),
       );
+      game._validateStoredRound(round, index + 1);
+      game._rounds.add(round);
+      for (var playerIndex = 0; playerIndex < players.length; playerIndex++) {
+        game._scores[playerIndex] += round.points[playerIndex];
+      }
+    }
+    final draft = json['draft'];
+    if (draft != null && !game.isFinished) {
+      try {
+        final parsedDraft = WizardRoundDraft.fromJson(
+          Map<String, dynamic>.from(draft as Map),
+        );
+        game._validateStoredDraft(parsedDraft);
+        game._draft = parsedDraft;
+      } on FormatException {
+        // A malformed draft is discarded; the saved game remains playable.
+      } on ArgumentError {
+        // A malformed draft is discarded; the saved game remains playable.
+      }
     }
     return game;
   }
@@ -269,6 +283,58 @@ class WizardGame {
         label,
         '$label müssen für alle Spieler zwischen 0 und $currentRoundNumber liegen.',
       );
+    }
+  }
+
+  void _validateStoredRound(WizardRoundResult round, int expectedNumber) {
+    if (round.number != expectedNumber ||
+        round.startingPlayerIndex !=
+            (initialStartingPlayerIndex + expectedNumber - 1) %
+                _players.length) {
+      throw FormatException('Die gespeicherte Rundenreihenfolge ist ungültig.');
+    }
+    _validateStoredValues(round.bids, round.number, 'Ansagen');
+    _validateStoredValues(round.tricks, round.number, 'Stiche');
+    if (round.tricks.fold(0, (sum, value) => sum + value) != round.number) {
+      throw FormatException('Die gespeicherten Stiche ergeben keine Runde.');
+    }
+    if (round.points.length != _players.length) {
+      throw FormatException('Die gespeicherten Punkte sind unvollständig.');
+    }
+    for (var index = 0; index < _players.length; index++) {
+      if (round.points[index] !=
+          scoreFor(bid: round.bids[index], tricks: round.tricks[index])) {
+        throw FormatException(
+          'Die gespeicherten Punkte sind nicht konsistent.',
+        );
+      }
+    }
+  }
+
+  void _validateStoredDraft(WizardRoundDraft draft) {
+    if (draft.activePlayerOrderIndex < 0 ||
+        draft.activePlayerOrderIndex >= _players.length) {
+      throw ArgumentError(
+        'Der gespeicherte Entwurf hat keinen gültigen Spieler.',
+      );
+    }
+    _validateStoredOptionalValues(draft.bids, 'Ansagen');
+    _validateStoredOptionalValues(draft.tricks, 'Stiche');
+  }
+
+  void _validateStoredValues(List<int> values, int round, String label) {
+    if (values.length != _players.length ||
+        values.any((value) => value < 0 || value > round)) {
+      throw FormatException('$label der gespeicherten Runde sind ungültig.');
+    }
+  }
+
+  void _validateStoredOptionalValues(List<int?> values, String label) {
+    if (values.length != _players.length ||
+        values.whereType<int>().any(
+          (value) => value < 0 || value > currentRoundNumber,
+        )) {
+      throw ArgumentError('$label des gespeicherten Entwurfs sind ungültig.');
     }
   }
 }

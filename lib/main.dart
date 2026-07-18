@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'wizard_game.dart';
 import 'game_repository.dart';
+import 'round_overview_page.dart';
 
 void main() => runApp(const CardGameCompanionApp());
 
@@ -575,8 +576,20 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                           mode: _mode,
                           bidLockEnabled: _bidLockEnabled,
                         );
-                        final games = await widget.repository.loadGames();
-                        await widget.repository.saveGames([...games, game]);
+                        try {
+                          final games = await widget.repository.loadGames();
+                          await widget.repository.saveGames([...games, game]);
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Das Spiel konnte nicht gespeichert werden. Bitte erneut versuchen.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         if (!context.mounted) return;
                         await Navigator.of(context).push(
                           MaterialPageRoute(
@@ -619,8 +632,9 @@ class _WizardGamePageState extends State<WizardGamePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
+    if (_hasEditableDraft &&
+        (state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused)) {
       unawaited(_saveDraft());
     }
   }
@@ -687,14 +701,26 @@ class _WizardGamePageState extends State<WizardGamePage>
   }
 
   Future<void> _saveDraft() async {
-    widget.game.saveDraft(
-      enteringTricks: _phase == _Phase.tricks,
-      activePlayerOrderIndex: _active,
-      bids: _baseOrderOptional(_bids),
-      tricks: _baseOrderOptional(_tricks),
-    );
-    await widget.onChanged?.call(widget.game);
+    if (!_hasEditableDraft) return;
+    try {
+      widget.game.saveDraft(
+        enteringTricks: _phase == _Phase.tricks,
+        activePlayerOrderIndex: _active,
+        bids: _baseOrderOptional(_bids),
+        tricks: _baseOrderOptional(_tricks),
+      );
+      await widget.onChanged?.call(widget.game);
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _error =
+            'Der Spielstand konnte nicht gespeichert werden. Bitte erneut versuchen.',
+      );
+    }
   }
+
+  bool get _hasEditableDraft =>
+      _phase == _Phase.bids || _phase == _Phase.tricks;
 
   int? get _forbiddenBid {
     if (!widget.game.bidLockEnabled) return null;
@@ -763,7 +789,7 @@ class _WizardGamePageState extends State<WizardGamePage>
   }
 
   Future<void> _exitGame() async {
-    await _saveDraft();
+    if (_hasEditableDraft) await _saveDraft();
     if (!mounted) return;
     final leave = await showDialog<bool>(
       context: context,
@@ -879,7 +905,7 @@ class _WizardGamePageState extends State<WizardGamePage>
                       '$_forbiddenBid ist gesperrt, damit die Ansagen nicht aufgehen.',
                       style: const TextStyle(color: _accent),
                     ),
-                  if (!isBids && _error != null)
+                  if (_error != null)
                     Text(
                       _error!,
                       style: const TextStyle(color: Color(0xFFFF7070)),
@@ -905,7 +931,7 @@ class _WizardGamePageState extends State<WizardGamePage>
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (!isBids && _error != null) ...[
+                  if (_error != null) ...[
                     const SizedBox(height: 8),
                     Text(
                       _error!,
@@ -1123,82 +1149,6 @@ String _durationText(Duration duration) {
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60);
   return hours > 0 ? '${hours}h ${minutes}min' : '${minutes}min';
-}
-
-class RoundOverviewPage extends StatelessWidget {
-  const RoundOverviewPage({super.key, required this.game});
-  final WizardGame game;
-
-  @override
-  Widget build(BuildContext context) {
-    final totals = List<List<int>>.generate(
-      game.rounds.length,
-      (_) => List.filled(game.players.length, 0),
-    );
-    for (var roundIndex = 0; roundIndex < game.rounds.length; roundIndex++) {
-      for (
-        var playerIndex = 0;
-        playerIndex < game.players.length;
-        playerIndex++
-      ) {
-        totals[roundIndex][playerIndex] =
-            (roundIndex == 0 ? 0 : totals[roundIndex - 1][playerIndex]) +
-            game.rounds[roundIndex].points[playerIndex];
-      }
-    }
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _PageHeader(onBack: () => Navigator.of(context).pop()),
-              const SizedBox(height: 28),
-              const Text(
-                'Punktestand',
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 18),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: DataTable(
-                      headingTextStyle: const TextStyle(
-                        color: _accent,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      columns: [
-                        const DataColumn(label: Text('Runde')),
-                        ...game.players.map(
-                          (name) => DataColumn(label: Text(name)),
-                        ),
-                      ],
-                      rows: List.generate(
-                        game.rounds.length,
-                        (roundIndex) => DataRow(
-                          cells: [
-                            DataCell(Text('${roundIndex + 1}')),
-                            ...List.generate(
-                              game.players.length,
-                              (playerIndex) => DataCell(
-                                Text('${totals[roundIndex][playerIndex]}'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ScoreGraph extends StatelessWidget {
