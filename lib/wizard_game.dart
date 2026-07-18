@@ -90,6 +90,7 @@ class WizardGame {
     required int totalRounds,
     this.initialStartingPlayerIndex = 0,
     this.mode = WizardGameMode.classic,
+    this.bidLockEnabled = false,
     DateTime? startedAt,
   }) : totalRounds = mode == WizardGameMode.classic
            ? classicWizardRoundsForPlayers(players.length)
@@ -140,6 +141,7 @@ class WizardGame {
   final int totalRounds;
   final int initialStartingPlayerIndex;
   final WizardGameMode mode;
+  final bool bidLockEnabled;
   final DateTime startedAt;
   final List<int> _scores;
   final List<WizardRoundResult> _rounds = [];
@@ -158,6 +160,7 @@ class WizardGame {
     'players': _players,
     'totalRounds': totalRounds,
     'mode': mode.storageValue,
+    'bidLockEnabled': bidLockEnabled,
     'initialStartingPlayerIndex': initialStartingPlayerIndex,
     'startedAt': startedAt.toIso8601String(),
     'scores': _scores,
@@ -171,6 +174,7 @@ class WizardGame {
       totalRounds: json['totalRounds'] as int,
       initialStartingPlayerIndex: json['initialStartingPlayerIndex'] as int,
       mode: WizardGameMode.fromStorage(json['mode'] as String?),
+      bidLockEnabled: json['bidLockEnabled'] as bool? ?? false,
       startedAt: DateTime.parse(json['startedAt'] as String),
     );
     game._scores

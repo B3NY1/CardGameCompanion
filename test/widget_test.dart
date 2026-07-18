@@ -47,6 +47,7 @@ void main() {
       players: ['Anna', 'Ben', 'Clara'],
       totalRounds: 5,
       mode: WizardGameMode.houseRule,
+      bidLockEnabled: true,
     );
     game.completeRound(bids: [0, 0, 0], tricks: [0, 1, 0]);
     game.completeRound(bids: [0, 0, 0], tricks: [1, 1, 0]);
@@ -183,6 +184,25 @@ void main() {
       mode: WizardGameMode.houseRule,
     );
     expect(game.totalRounds, 7);
+  });
+
+  test('bid lock is disabled by default and persists when enabled', () {
+    final classic = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 20,
+    );
+    expect(classic.bidLockEnabled, isFalse);
+
+    final lockedHouseRule = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 7,
+      mode: WizardGameMode.houseRule,
+      bidLockEnabled: true,
+    );
+    expect(
+      WizardGame.fromJson(lockedHouseRule.toJson()).bidLockEnabled,
+      isTrue,
+    );
   });
 
   testWidgets('wrong trick total can be corrected within the same round', (

@@ -357,6 +357,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
   int _startPlayer = 0;
   int _totalRounds = 20;
   WizardGameMode _mode = WizardGameMode.classic;
+  bool _bidLockEnabled = false;
 
   @override
   void initState() {
@@ -474,6 +475,9 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                   return;
                 }
                 _mode = selection.first;
+                if (_mode == WizardGameMode.classic) {
+                  _bidLockEnabled = false;
+                }
                 _syncClassicRounds();
               }),
             ),
@@ -506,6 +510,17 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                   ),
               ],
             ),
+            if (_mode == WizardGameMode.houseRule)
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ansage-Sperre'),
+                subtitle: const Text(
+                  'Die letzte Ansage darf nicht auf die Stiche aufgehen.',
+                ),
+                value: _bidLockEnabled,
+                onChanged: (enabled) =>
+                    setState(() => _bidLockEnabled = enabled),
+              ),
             const SizedBox(height: 8),
             Expanded(
               child: ListView.separated(
@@ -550,6 +565,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                     totalRounds: _totalRounds,
                     initialStartingPlayerIndex: _startPlayer,
                     mode: _mode,
+                    bidLockEnabled: _bidLockEnabled,
                   );
                   final games = await widget.repository.loadGames();
                   await widget.repository.saveGames([...games, game]);
@@ -673,6 +689,7 @@ class _WizardGamePageState extends State<WizardGamePage>
   }
 
   int? get _forbiddenBid {
+    if (!widget.game.bidLockEnabled) return null;
     if (_active != _order.length - 1) return null;
     return widget.game.currentRoundNumber -
         _bids.take(_active).whereType<int>().fold(0, (sum, bid) => sum + bid);
@@ -816,6 +833,13 @@ class _WizardGamePageState extends State<WizardGamePage>
                   '${widget.game.currentRoundNumber} Stich${widget.game.currentRoundNumber == 1 ? '' : 'e'} - ${widget.game.players[_order.first]} beginnt',
                   style: const TextStyle(color: Color(0xFFACACAC)),
                 ),
+                if (widget.game.mode == WizardGameMode.houseRule)
+                  Text(
+                    widget.game.bidLockEnabled
+                        ? 'Hausregel: Ansage-Sperre aktiv'
+                        : 'Hausregel: Ansage-Sperre aus',
+                    style: const TextStyle(color: _accent, fontSize: 12),
+                  ),
                 const SizedBox(height: 24),
                 Expanded(
                   child: ListView.separated(

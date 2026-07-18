@@ -21,6 +21,7 @@ Der Status wird bei jeder Erweiterung aktualisiert.
 - [vorhanden] Punkte automatisch berechnen
 - [vorhanden] Klassisches Wizard konfiguriert die Rundenzahl automatisch: 3/4/5/6 Personen spielen 20/15/12/10 Runden
 - [vorhanden] Hausregel erlaubt eine frei wählbare Rundenzahl
+- [vorhanden] Ansage-Sperre ist eine optionale Hausregel und beim klassischen Wizard standardmäßig ausgeschaltet
 - [vorhanden] Laufzeit bis Spielende erfassen
 - [vorhanden] Endseite mit Glückwunsch, Sieger und Punktverlauf
 
