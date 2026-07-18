@@ -43,7 +43,11 @@ void main() {
   testWidgets('last Wizard bid is blocked when bids would add up', (
     tester,
   ) async {
-    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 5);
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 5,
+      mode: WizardGameMode.houseRule,
+    );
     game.completeRound(bids: [0, 0, 0], tricks: [0, 1, 0]);
     game.completeRound(bids: [0, 0, 0], tricks: [1, 1, 0]);
     game.completeRound(bids: [0, 0, 0], tricks: [1, 1, 1]);
@@ -67,7 +71,11 @@ void main() {
   });
 
   testWidgets('a one-round game reaches the finish screen', (tester) async {
-    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 1);
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 1,
+      mode: WizardGameMode.houseRule,
+    );
     await tester.pumpWidget(MaterialApp(home: WizardGamePage(game: game)));
 
     await tester.tap(find.widgetWithText(OutlinedButton, '0'));
@@ -93,7 +101,11 @@ void main() {
   });
 
   test('example game can be played through to a final score', () {
-    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 3);
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 3,
+      mode: WizardGameMode.houseRule,
+    );
 
     game.completeRound(bids: [0, 1, 0], tricks: [0, 1, 0]);
     game.completeRound(bids: [1, 0, 1], tricks: [1, 1, 0]);
@@ -106,7 +118,11 @@ void main() {
   });
 
   test('a round is rejected if its tricks do not add up', () {
-    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 1);
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 1,
+      mode: WizardGameMode.houseRule,
+    );
 
     expect(
       () => game.completeRound(bids: [0, 1, 0], tricks: [0, 0, 0]),
@@ -115,7 +131,11 @@ void main() {
   });
 
   test('a saved game retains its players, scores and rounds', () {
-    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 2);
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 2,
+      mode: WizardGameMode.houseRule,
+    );
     game.completeRound(bids: [0, 0, 0], tricks: [0, 1, 0]);
 
     final restored = WizardGame.fromJson(game.toJson());
@@ -145,10 +165,34 @@ void main() {
     );
   });
 
+  test('classic Wizard derives the round count from the player count', () {
+    expect(classicWizardRoundsForPlayers(3), 20);
+    expect(classicWizardRoundsForPlayers(4), 15);
+    expect(classicWizardRoundsForPlayers(5), 12);
+    expect(classicWizardRoundsForPlayers(6), 10);
+    expect(
+      WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 1).totalRounds,
+      20,
+    );
+  });
+
+  test('house rules retain the selected round count', () {
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 7,
+      mode: WizardGameMode.houseRule,
+    );
+    expect(game.totalRounds, 7);
+  });
+
   testWidgets('wrong trick total can be corrected within the same round', (
     tester,
   ) async {
-    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 2);
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 2,
+      mode: WizardGameMode.houseRule,
+    );
     game.completeRound(bids: [0, 0, 0], tricks: [1, 0, 0]);
     await tester.pumpWidget(MaterialApp(home: WizardGamePage(game: game)));
 
@@ -183,7 +227,11 @@ void main() {
   });
 
   test('damaged saved games do not hide valid games', () async {
-    final valid = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 2);
+    final valid = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 2,
+      mode: WizardGameMode.houseRule,
+    );
     SharedPreferences.setMockInitialValues({
       'wizard_games_v1': '[${jsonEncode(valid.toJson())},{"players":[]}]',
     });
@@ -198,7 +246,11 @@ void main() {
 
   testWidgets('latest draft is retained after rapid inputs', (tester) async {
     WizardGame? saved;
-    final game = WizardGame(players: ['Anna', 'Ben', 'Clara'], totalRounds: 2);
+    final game = WizardGame(
+      players: ['Anna', 'Ben', 'Clara'],
+      totalRounds: 2,
+      mode: WizardGameMode.houseRule,
+    );
     await tester.pumpWidget(
       MaterialApp(
         home: WizardGamePage(

@@ -355,7 +355,8 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
   final _controller = TextEditingController();
   late final List<String> _players;
   int _startPlayer = 0;
-  int _totalRounds = 10;
+  int _totalRounds = 20;
+  WizardGameMode _mode = WizardGameMode.classic;
 
   @override
   void initState() {
@@ -368,6 +369,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
         'Clara',
       ].where((name) => !_players.contains(name)).take(3 - _players.length),
     );
+    _syncClassicRounds();
   }
 
   @override
@@ -378,11 +380,22 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
 
   void _addPlayer() {
     final name = _controller.text.trim();
-    if (name.isEmpty || _players.contains(name)) return;
+    if (name.isEmpty ||
+        _players.contains(name) ||
+        (_mode == WizardGameMode.classic && _players.length >= 6)) {
+      return;
+    }
     setState(() {
       _players.add(name);
+      _syncClassicRounds();
       _controller.clear();
     });
+  }
+
+  void _syncClassicRounds() {
+    if (_mode == WizardGameMode.classic) {
+      _totalRounds = classicWizardRoundsForPlayers(_players.length);
+    }
   }
 
   @override
@@ -427,7 +440,14 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                     .map(
                       (person) => ActionChip(
                         label: Text(person),
-                        onPressed: () => setState(() => _players.add(person)),
+                        onPressed: () => setState(() {
+                          if (_mode == WizardGameMode.classic &&
+                              _players.length >= 6) {
+                            return;
+                          }
+                          _players.add(person);
+                          _syncClassicRounds();
+                        }),
                       ),
                     )
                     .toList(),
@@ -436,6 +456,28 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
             ],
             _SeatingTable(players: _players, startingPlayer: _startPlayer),
             const SizedBox(height: 16),
+            SegmentedButton<WizardGameMode>(
+              segments: const [
+                ButtonSegment(
+                  value: WizardGameMode.classic,
+                  label: Text('Klassisch'),
+                ),
+                ButtonSegment(
+                  value: WizardGameMode.houseRule,
+                  label: Text('Hausregel'),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (selection) => setState(() {
+                if (selection.first == WizardGameMode.classic &&
+                    _players.length > 6) {
+                  return;
+                }
+                _mode = selection.first;
+                _syncClassicRounds();
+              }),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 const Expanded(
@@ -444,17 +486,24 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
-                DropdownButton<int>(
-                  value: _totalRounds,
-                  onChanged: (rounds) => setState(() => _totalRounds = rounds!),
-                  items: List.generate(
-                    20,
-                    (index) => DropdownMenuItem(
-                      value: index + 1,
-                      child: Text('${index + 1}'),
+                if (_mode == WizardGameMode.classic)
+                  Text(
+                    '$_totalRounds (klassisch)',
+                    style: const TextStyle(color: _accent),
+                  )
+                else
+                  DropdownButton<int>(
+                    value: _totalRounds,
+                    onChanged: (rounds) =>
+                        setState(() => _totalRounds = rounds!),
+                    items: List.generate(
+                      20,
+                      (index) => DropdownMenuItem(
+                        value: index + 1,
+                        child: Text('${index + 1}'),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -479,6 +528,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                             if (_startPlayer >= _players.length) {
                               _startPlayer = 0;
                             }
+                            _syncClassicRounds();
                           })
                         : null,
                   );
@@ -499,6 +549,7 @@ class _WizardSetupPageState extends State<WizardSetupPage> {
                     players: _players,
                     totalRounds: _totalRounds,
                     initialStartingPlayerIndex: _startPlayer,
+                    mode: _mode,
                   );
                   final games = await widget.repository.loadGames();
                   await widget.repository.saveGames([...games, game]);

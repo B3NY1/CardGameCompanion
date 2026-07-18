@@ -31,6 +31,30 @@ class WizardRoundResult {
       );
 }
 
+enum WizardGameMode {
+  classic,
+  houseRule;
+
+  static WizardGameMode fromStorage(String? value) =>
+      value == 'classic' ? WizardGameMode.classic : WizardGameMode.houseRule;
+
+  String get storageValue => name;
+}
+
+int classicWizardRoundsForPlayers(int playerCount) {
+  return switch (playerCount) {
+    3 => 20,
+    4 => 15,
+    5 => 12,
+    6 => 10,
+    _ => throw ArgumentError.value(
+      playerCount,
+      'playerCount',
+      'Klassisches Wizard unterstützt drei bis sechs Personen.',
+    ),
+  };
+}
+
 class WizardRoundDraft {
   const WizardRoundDraft({
     required this.enteringTricks,
@@ -63,10 +87,14 @@ class WizardRoundDraft {
 class WizardGame {
   WizardGame({
     required List<String> players,
-    required this.totalRounds,
+    required int totalRounds,
     this.initialStartingPlayerIndex = 0,
+    this.mode = WizardGameMode.classic,
     DateTime? startedAt,
-  }) : _players = List.unmodifiable(players),
+  }) : totalRounds = mode == WizardGameMode.classic
+           ? classicWizardRoundsForPlayers(players.length)
+           : totalRounds,
+       _players = List.unmodifiable(players),
        _scores = List.filled(players.length, 0, growable: true),
        startedAt = startedAt ?? DateTime.now() {
     if (players.length < 3) {
@@ -111,6 +139,7 @@ class WizardGame {
   final List<String> _players;
   final int totalRounds;
   final int initialStartingPlayerIndex;
+  final WizardGameMode mode;
   final DateTime startedAt;
   final List<int> _scores;
   final List<WizardRoundResult> _rounds = [];
@@ -128,6 +157,7 @@ class WizardGame {
   Map<String, dynamic> toJson() => {
     'players': _players,
     'totalRounds': totalRounds,
+    'mode': mode.storageValue,
     'initialStartingPlayerIndex': initialStartingPlayerIndex,
     'startedAt': startedAt.toIso8601String(),
     'scores': _scores,
@@ -140,6 +170,7 @@ class WizardGame {
       players: List<String>.from(json['players'] as List),
       totalRounds: json['totalRounds'] as int,
       initialStartingPlayerIndex: json['initialStartingPlayerIndex'] as int,
+      mode: WizardGameMode.fromStorage(json['mode'] as String?),
       startedAt: DateTime.parse(json['startedAt'] as String),
     );
     game._scores
